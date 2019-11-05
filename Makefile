@@ -1,6 +1,6 @@
 #! /usr/bin/make
-VERSION_NAME=The Unfailing Twitter Consensus Algorithm
-VERSION=0.7.2
+VERSION_NAME=Bitcoin's Proof of Stake
+VERSION=0.7.3
 
 ifeq ($(VERSION),)
 $(error "ERROR: git is required for generating version information")
