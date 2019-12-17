@@ -1,6 +1,6 @@
 #! /usr/bin/make
-VERSION_NAME=Bitcoin's Proof of Stake
-VERSION=0.7.3
+VERSION_NAME="Blockchain Good, Orange Coin Bad"
+VERSION=0.8.0
 
 ifeq ($(VERSION),)
 $(error "ERROR: git is required for generating version information")
