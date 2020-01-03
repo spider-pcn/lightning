@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """Plugin that queues transactions 
-
 Used to test restarts / crashes while HTLCs were accepted, but not yet
 settled/forwarded/
-
 """
-
 
 from lightning import Plugin
 from threading import Thread
