@@ -19,7 +19,6 @@ TEMPORARY_CHANNEL_FAILURE = 0x1111
 # aren't enough funds
 @plugin.async_hook("htlc_accepted")
 def on_htlc_accepted(onion, htlc, request, plugin, **kwargs):
-<<<<<<< aa2a9cdf0715a8040ef51b67244d57479a604fe6
     plugin.lock.acquire()
     try:
         entry_time = time.time()
@@ -50,7 +49,6 @@ def on_htlc_accepted(onion, htlc, request, plugin, **kwargs):
 def clear_pending(plugin):
     while True:
         time.sleep(5)
-
         funds = plugin.rpc.listfunds()
 
         plugin.lock.acquire()
