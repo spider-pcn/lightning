@@ -10,9 +10,6 @@ settled/forwarded/
 from lightning import Plugin, LightningRpc
 from threading import Thread
 from collections import deque
-import json
-import os
-import tempfile
 import time
 
 plugin = Plugin()
@@ -29,7 +26,7 @@ def on_htlc_accepted(onion, htlc, request, plugin, **kwargs):
     if channel_id not in plugin.pending:
         plugin.pending[channel_id] = deque()
     
-    plugin.log("Stashing HTLC {}, next short_channel_id {} now have {} pending HTLCs".format(
+    plugin.log("Queueing HTLC {}, next short_channel_id {} now have {} pending HTLCs".format(
         channel_id, 
         htlc['payment_hash'],
         len(plugin.pending[channel_id]),
@@ -48,9 +45,13 @@ def on_htlc_accepted(onion, htlc, request, plugin, **kwargs):
 
 # background thread that goes through the queues and tries the next payment in LIFO order 
 # and also garbage collects old transactions
+# TODO: should actually be triggered any time an HTLC settles or fails 
+# need not run as background thread, can be done using forward_event notification
 def clear_pending(plugin):
     while True:
         time.sleep(5)
+
+        funds = rpc_interface.listfunds()
 
         for channel_id, request_queue in plugin.pending.items():
             # first clear old/timed out requests
@@ -73,6 +74,13 @@ def clear_pending(plugin):
 
             # If we don't have any pending requests go back to sleep
             if len(request_queue) == 0:
+                continue
+
+            # check if there's enough balance for the top most payment
+            newest_request = request_queue[0][0]
+            available = sum([int(x["our_amount_msat"]) for x in funds["channels"] \
+                if x["short_channel_id"] == channel_id])
+            if available < newest_request.params['htlc']["forward_amt"]:
                 continue
 
             # Pick the most recent payment (LIFO works best for deadlines)
