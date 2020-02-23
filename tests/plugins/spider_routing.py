@@ -42,6 +42,7 @@ def on_htlc_accepted(onion, htlc, request, plugin, **kwargs):
     finally:
         plugin.lock.release()
 
+
 # background thread that goes through the queues and tries the next payment in LIFO order 
 # and also garbage collects old transactions
 # TODO: should actually be triggered any time an HTLC settles or fails 
