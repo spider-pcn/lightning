@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plugin that holds on to HTLCs for 10 seconds.
+"""Plugin that queues transactions 
 
 Used to test restarts / crashes while HTLCs were accepted, but not yet
 settled/forwarded/
@@ -7,7 +7,7 @@ settled/forwarded/
 """
 
 
-from lightning import Plugin, LightningRpc
+from lightning import Plugin
 from threading import Thread
 from collections import deque
 import time
@@ -32,16 +32,7 @@ def on_htlc_accepted(onion, htlc, request, plugin, **kwargs):
         len(plugin.pending[channel_id]),
     ))
 
-    if len(plugin.pending[channel_id]) > 0:
-        plugin.pending[channel_id].append((request, entry_time))
-    else:
-        funds = rpc_interface.listfunds()
-        available = sum([int(x["our_amount_msat"]) for x in funds["channels"] \
-                if x["short_channel_id"] == channel_id])
-        if available < htlc["forward_amt"]:
-            plugin.pending[channel_id].append((request, entry_time))
-        else:
-            return {'result': 'continue'}
+    plugin.pending[channel_id].append((request, entry_time))
 
 # background thread that goes through the queues and tries the next payment in LIFO order 
 # and also garbage collects old transactions
@@ -51,7 +42,7 @@ def clear_pending(plugin):
     while True:
         time.sleep(5)
 
-        funds = rpc_interface.listfunds()
+        funds = plugin.rpc.listfunds()
 
         for channel_id, request_queue in plugin.pending.items():
             # first clear old/timed out requests
@@ -103,19 +94,11 @@ def clear_pending(plugin):
 
 @plugin.init()
 def init(options, configuration, plugin):
-    global rpc_interface
     plugin.log("spider_routing.py initializing")
     
     # dictionary of list of pending requests indexed by next channel
     # or short channel id.
     plugin.pending = {}
-
-    # initialize rpc interface for finding funds available
-    basedir = configuration['lightning-dir']
-    rpc_filename = configuration['rpc-file']
-    path = join(basedir, rpc_filename)
-    rpc_interface = LightningRpc(path)
-    plugin.log("Funds RPC successfully initialized")
 
     # Now start the background thread that'll trickle the HTLCs
     # through. daemon=True makes sure that we don't wait for the thread to

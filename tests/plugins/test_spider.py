@@ -60,7 +60,7 @@ def test_payment_completion(node_factory, executor):
     for f in futures:
         f.result()
 
-    # Now check that all of them completed, should be LIFO
+    # Now check that all of them completed, should be FIFO
     assert(len(completed) == 10)
-    print completed
+    print(completed)
     #assert(completed == list(range(10)))
