@@ -72,6 +72,7 @@ log-file=/tmp/l1-regtest/log
 addr=localhost:6060
 EOF
 
+# Node two config
 cat << 'EOF' > /tmp/l2-regtest/config
 network=regtest
 daemon
@@ -80,16 +81,27 @@ log-file=/tmp/l2-regtest/log
 addr=localhost:9090
 EOF
 
+# Node three config
+cat << 'EOF' > /tmp/l3-regtest/config
+network=regtest
+daemon
+log-level=debug
+log-file=/tmp/l3-regtest/log
+addr=localhost:7070
+EOF
+
 alias l1-cli='$LCLI --lightning-dir=/tmp/l1-regtest'
 alias l2-cli='$LCLI --lightning-dir=/tmp/l2-regtest'
+alias l3-cli='$LCLI --lightning-dir=/tmp/l3-regtest'
 alias bt-cli='bitcoin-cli -regtest'
 alias l1-log='less /tmp/l1-regtest/log'
 alias l2-log='less /tmp/l2-regtest/log'
+alias l3-log='less /tmp/l3-regtest/log'
 
 start_ln() {
 	# Start bitcoind in the background
 	test -f "$PATH_TO_BITCOIN/regtest/bitcoind.pid" || \
-		bitcoind -daemon -regtest -txindex
+		bitcoind -daemon -regtest -txindex --fallbackfee=0.0001
 
 	# Wait for it to start.
 	while ! bt-cli ping 2> /dev/null; do sleep 1; done
@@ -104,9 +116,11 @@ start_ln() {
 		"$LIGHTNINGD" --lightning-dir=/tmp/l1-regtest
 	test  -f /tmp/l2-regtest/lightningd-regtest.pid || \
 		"$LIGHTNINGD" --lightning-dir=/tmp/l2-regtest
+	test  -f /tmp/l3-regtest/lightningd-regtest.pid || \
+                "$LIGHTNINGD" --lightning-dir=/tmp/l3-regtest
 
 	# Give a hint.
-	echo "Commands: l1-cli, l2-cli, l[1|2]-log, bt-cli, stop_ln, cleanup_ln"
+	echo "Commands: l1-cli, l2-cli, l3-cli, l[1|2|3]-log, bt-cli, stop_ln, cleanup_ln"
 }
 
 stop_ln() {
@@ -116,8 +130,11 @@ stop_ln() {
 	test ! -f /tmp/l2-regtest/lightningd-regtest.pid || \
 		(kill "$(cat /tmp/l2-regtest/lightningd-regtest.pid)"; \
 		rm /tmp/l2-regtest/lightningd-regtest.pid)
+	test ! -f /tmp/l3-regtest/lightningd-regtest.pid || \
+                (kill "$(cat /tmp/l3-regtest/lightningd-regtest.pid)"; \
+                rm /tmp/l3-regtest/lightningd-regtest.pid)
 	test ! -f "$PATH_TO_BITCOIN/regtest/bitcoind.pid" || \
-		(kill "$(cat "$PATH_TO_BITCOIN/regtest/bitcoind.pid")"; \
+		(kill -9 "$(cat "$PATH_TO_BITCOIN/regtest/bitcoind.pid")"; \
 		rm "$PATH_TO_BITCOIN/regtest/bitcoind.pid")
 }
 
@@ -125,9 +142,11 @@ cleanup_ln() {
 	stop_ln
 	unalias l1-cli
 	unalias l2-cli
+	unalias l3-cli
 	unalias bt-cli
 	unalias l1-log
 	unalias l2-log
+	unalias l3-log
 	unset -f start_ln
 	unset -f stop_ln
 	unset -f cleanup_ln
