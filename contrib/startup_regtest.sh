@@ -61,7 +61,7 @@ if [ -z "$PATH_TO_BITCOIN" ]; then
 	fi
 fi
 
-mkdir -p /tmp/l1-regtest /tmp/l2-regtest
+mkdir -p /tmp/l1-regtest /tmp/l2-regtest /tmp/l3-regtest
 
 # Node one config
 cat << 'EOF' > /tmp/l1-regtest/config
@@ -138,6 +138,8 @@ stop_ln() {
 
 cleanup_ln() {
 	stop_ln
+        sudo rm -r /tmp/*regtest
+        rm -r "$PATH_TO_BITCOIN/regtest/"
 	unalias l1-cli
 	unalias l2-cli
 	unalias l3-cli
