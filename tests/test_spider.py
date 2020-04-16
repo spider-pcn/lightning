@@ -3,7 +3,7 @@
 from pyln.testing.fixtures import *
 from time import time
 
-plugin_path = os.path.join(os.path.dirname(__file__), "spider_routing.py")
+plugin_path = os.path.join(os.path.dirname(__file__), "plugins", "spider_routing.py")
 
 """ make sure regular payment with channel balances goes through 
 """
