@@ -69,9 +69,12 @@ def clear_pending(plugin):
 
             # check if there's enough balance for the top most payment
             newest_request = request_queue[0][0]
+            forward_amount = newest_request.params['onion']["forward_amount"]
+            assert(forward_amount[-4:] == 'msat')
+            forward_msats = int(forward_amount[:-4])
             available = sum([int(x["our_amount_msat"]) for x in funds["channels"] \
                 if x["short_channel_id"] == channel_id])
-            if available < newest_request.params['htlc']["forward_amt"]:
+            if available < forward_msats:
                 continue
 
             # Pick the most recent payment (LIFO works best for deadlines)
