@@ -1,7 +1,7 @@
 # A lot of this code has been helped by cdecker
-
-from pyln.testing.fixtures import *
+from fixtures import *
 from time import time
+import os
 
 plugin_path = os.path.join(os.path.dirname(__file__), "plugins", "spider_routing.py")
 
