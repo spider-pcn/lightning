@@ -1,6 +1,6 @@
 # A lot of this code has been helped by cdecker
 from fixtures import *
-from time import time
+import time
 import os
 
 plugin_path = os.path.join(os.path.dirname(__file__), "plugins", "spider_routing.py")
@@ -16,7 +16,7 @@ def test_regressive(node_factory, executor):
         wait_for_announce=True  # Let nodes finish gossip before returning
     )
 
-    inv = l3.rpc.invoice(42, "lbl{:}".format(int(time())), "description")['bolt11']
+    inv = l3.rpc.invoice(42, "lbl{:}".format(int(time.time())), "description")['bolt11']
 
     # Let the pay run in the background (on an executor thread) so we don't
     # wait for the pay to succeed before we can check in with the plugin.
@@ -40,13 +40,20 @@ def test_payment_completion(node_factory, executor):
         wait_for_announce=True  # Let nodes finish gossip before returning
     )
 
-    # TODO: need way of setting balances on payment channels
     completed = []
     futures = []
+
+    # send a single payment for reserve amount first so that future payments
+    # can actually get queued and completed
+    # otherwise no payments will succeed until reserve amount has been accumulated on l3's end
+    inv = l3.rpc.invoice(10000000, "buffer payment{:}".format(int(time.time())), "description")['bolt11']
+    f = executor.submit(l1.rpc.pay, inv)
+    f.result()
+
     def trypay(i, sender, receiver):
         # Small helper initiating a payment and then inserting itself into the
         # list of completed order in the order of completion.
-        inv = receiver.rpc.invoice(42, "lbl{:}".format(i), "description")['bolt11']
+        inv = receiver.rpc.invoice(10, "lbl{:}".format(i), "description")['bolt11']
         sender.rpc.pay(inv)
         completed.append(i)
 
@@ -56,11 +63,17 @@ def test_payment_completion(node_factory, executor):
         receiver = l3 if i % 2 == 0 else l1
         futures.append(executor.submit(trypay, i, sender, receiver))
 
-    # Now wait for all futures to complete.
-    for f in futures:
-        f.result()
+    # TODO: somehow tests fail if not for this RPC call
+    time.sleep(15)
+    peers = l2.rpc.listpeers()
+    print("l2's peers", peers)
 
+    # Now wait for all futures to complete.
+    for i, f in enumerate(futures):
+        print("Future number", i)
+        print(completed)
+        f.result()
+    
     # Now check that all of them completed, should be FIFO
-    assert(len(completed) == 10)
     print(completed)
-    #assert(completed == list(range(10)))
+    assert(len(completed) == 10)
