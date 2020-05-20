@@ -31,6 +31,19 @@ def test_regressive(node_factory, executor):
     f.result()
 
 
+""" ensure that node's incoming link has some spendable msat to make route is found
+"""
+def check_spendable(node):
+    peer = node.rpc.listpeers().get('peers')[0]
+    spendable_msat = int(peer['channels'][0]['spendable_msatoshi'])
+    print("spendable msat", spendable_msat)
+    while spendable_msat == 0:
+        time.sleep(15)
+        peer = node.rpc.listpeers().get('peers')[0]
+        spendable_msat = int(peer['channels'][0]['spendable_msatoshi'])
+        print("spendable msat", spendable_msat)
+
+
 """  when there isn't insufficient balance, payment gets queued and completed later
 """
 def test_payment_completion(node_factory, executor):
@@ -63,15 +76,14 @@ def test_payment_completion(node_factory, executor):
         receiver = l3 if i % 2 == 0 else l1
         futures.append(executor.submit(trypay, i, sender, receiver))
 
-    # TODO: somehow tests fail if not for this RPC call
-    time.sleep(15)
-    peers = l2.rpc.listpeers()
-    print("l2's peers", peers)
+    # ensure that that spendable msats > 0 before attempting the payments 
+    # tests fail if not for this check
+    check_spendable(l2)
 
     # Now wait for all futures to complete.
     for i, f in enumerate(futures):
-        print("Future number", i)
-        print(completed)
+        check_spendable(l2)
+        print("Future number", i, completed)
         f.result()
     
     # Now check that all of them completed, should be FIFO
