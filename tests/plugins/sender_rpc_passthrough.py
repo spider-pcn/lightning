@@ -1,19 +1,12 @@
 def try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash):
     #by here best_route is the route to send the unit on
     #update the value in the route info
-    plugin.routes_in_use[destination][best_route_index][2] += amount
+    route_tuple = plugin.routes_in_use[destination][best_route_index]
+    route_tuple[2] += amount
 
     #now we actually pay the one unit on that route
-    try:
-        plugin.rpc.sendpay(route, payment_hash)
-        plugin.rpc.waitsendpay(payment_hash, retry_for + start_ts - int(time.time()))
-        handle_result(plugin, False, best_route_index, destination)
-        return success_msg
-
-    except RpcError as e:
-        plugin.log("RpcError: " + str(e))
-        handle_result(plugin, True, best_route_index, destination)
-        return failure_msg
+    plugin.payment_hash_to_route[payment_hash] = best_route_index
+    plugin.rpc.sendpay(route_tuple[0], payment_hash)
 
 def send_more_transactions(plugin, destination, route_index):
     route = plugin.routes_in_use[destination][route_index]
@@ -27,28 +20,49 @@ def send_more_transactions(plugin, destination, route_index):
         else:
             break
 
-def handle_result(plugin, marked, route_index, destination, amount):
-    #Need something to update weights
-    #when we get a response as marked or not marked'
-    route = routes_in_use[destination][route_index]
-    route[2] -= amount
-    if marked:
-        route[1] = max(route[2] - plugin.beta, 1)
-    else:
-        summation = 0
-        for routes in plugin.routes_in_use[destination]:
-            summation += routes[1]
-        route[1] += (plugin.alpha/summation)
-        slack = route_info[1] - route_info[2]
-        send_more_transactions(plugin, destination, route_index)
+@plugin.subscribe("sendpay_success")
+def handle_sendpay_success(plugin, sendpay_success):
+    plugin.log("receive a sendpay_success recored, id: {}, payment_hash: {}".format(sendpay_success['id'], sendpay_success['payment_hash']))
+
+    destination = sendpay_success['destination']
+    amount = sendpay_success['msatoshi']
+    payment_hash = sendpay_success['payment_hash']
+    route_index = plugin.payment_hash_to_route[payment_hash]
+    route_tuple = plugin.routes_in_use[destination][route_index]
+    route_tuple[2] -= amount
+
+    #update window
+    summation = 0
+    for routes in plugin.routes_in_use[destination]:
+        summation += routes[1]
+    route_tuple[1] += (plugin.alpha/summation)
+    slack = route_tuple[1] - route_tuple[2]
+    delete plugin.payment_hash_to_route[payment_hash]
+    send_more_transactions(plugin, destination, route_index)
 
 
+@plugin.subscribe("sendpay_failure")
+def handle_sendpay_failure(plugin, sendpay_failure):
+    plugin.log("receive a sendpay_failure recored, id: {}, payment_hash: {}".format(sendpay_failure['data']['id'],
+               sendpay_failure['data']['payment_hash']))
 
-@plugin.method('spider_pay')
+    destination = sendpay_failure['data']['destination']
+    amount = sendpay_failure['data']['msatoshi']
+    payment_hash = sendpay_failure['data']['payment_hash']
+    route_index = plugin.payment_hash_to_route[payment_hash]
+    route_tuple = plugin.routes_in_use[destination][route_index]
+    route_tuple[2] -= amount
+
+    #update window
+    route_tuple[1] = max(route_tuple[2] - plugin.beta, 1)
+    delete plugin.payment_hash_to_route[payment_hash]
+
+
+@plugin.async_method('spider_pay')
 def spider_pay(plugin, invoice):
     #TODO
-    destination = None
-    amount = None
+    destination = plugin.rpc.decodepay(invoice)['payee']
+    amount = invoice['amount_msat']
     payment_hash = invoice['payment_hash']
 
     if destination not in plugin.routes_in_use:
@@ -60,8 +74,10 @@ def spider_pay(plugin, invoice):
         for i in range(4):
             r = plugin.rpc.getroute(destination, plugin.payment_size, riskfactor=1,
                                     cltv=9, exclude=excludes)
-            excludes += r['route']
-            plugin.routes_in_use[destination].append((r['route'], window, 0))
+            plugin.routes_in_use[destination].append((r, window, 0))
+
+            For c in route:
+	              excludes.append(c[‘channel’]['short_channel_id'])
 
     if plugin.routes_in_use[destination] == []:
         return failure_msg
@@ -98,6 +114,7 @@ def init(options, configuration, plugin):
     plugin.routes_in_use = {}
     #turn this into a dictionary of dequeues
     plugin.queue = {}
+    plugin.payment_hash_to_route = {}
     plugin.beta = 1
     plugin.alpha = 10
 
