@@ -1,3 +1,5 @@
+THRESHOLD = 1000 #Msats below which we exclude channels from re-consideration
+
 def try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash):
     #by here best_route is the route to send the unit on
     #update the value in the route info
@@ -37,14 +39,15 @@ def handle_sendpay_success(plugin, sendpay_success):
         summation += routes[1]
     route_tuple[1] += (plugin.alpha/summation)
     slack = route_tuple[1] - route_tuple[2]
-    delete plugin.payment_hash_to_route[payment_hash]
+    del plugin.payment_hash_to_route[payment_hash]
     send_more_transactions(plugin, destination, route_index)
 
 
 @plugin.subscribe("sendpay_failure")
 def handle_sendpay_failure(plugin, sendpay_failure):
-    plugin.log("receive a sendpay_failure recored, id: {}, payment_hash: {}".format(sendpay_failure['data']['id'],
-               sendpay_failure['data']['payment_hash']))
+    plugin.log("receive a sendpay_failure recored, id: {}, \
+            payment_hash: {}".format(sendpay_failure['data']['id'],\
+            sendpay_failure['data']['payment_hash']))
 
     destination = sendpay_failure['data']['destination']
     amount = sendpay_failure['data']['msatoshi']
@@ -76,8 +79,10 @@ def spider_pay(plugin, invoice):
                                     cltv=9, exclude=excludes)
             plugin.routes_in_use[destination].append((r, window, 0))
 
-            For c in route:
-	              excludes.append(c[‘channel’]['short_channel_id'])
+            for c in route:
+                if c['channel']['amount_msat'] < THRESHOLD:
+                    if 'short_channel_id' in c['channel']:
+	                excludes.append(c[‘channel’]['short_channel_id'])
 
     if plugin.routes_in_use[destination] == []:
         return failure_msg
