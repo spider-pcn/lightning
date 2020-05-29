@@ -1,5 +1,4 @@
 THRESHOLD = 1000 #Msats below which we exclude channels from re-consideration
-
 def try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash):
     #by here best_route is the route to send the unit on
     #update the value in the route info
@@ -126,7 +125,8 @@ def init(options, configuration, plugin):
     # Now start the background thread that'll trickle the HTLCs
     # through. daemon=True makes sure that we don't wait for the thread to
     # exit when shutting down.
-    thread = Thread(target=clear_pending, args=(plugin,), daemon=True)
-    thread.start()
+    # TODO: do we need a cleanup thread?
+    #thread = Thread(target=clear_pending, args=(plugin,), daemon=True)
+    #thread.start()
 
 plugin.run()
