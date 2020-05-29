@@ -25,17 +25,23 @@ def on_htlc_accepted(onion, htlc, request, plugin, **kwargs):
     plugin.lock.acquire()
     try:
         entry_time = time.time()
-        channel_id = onion["short_channel_id"]
-        if channel_id not in plugin.pending:
-            plugin.pending[channel_id] = deque()
-        
-        plugin.log("Queueing HTLC {}, next short_channel_id {} now have {} pending HTLCs".format(
-            channel_id, 
-            htlc['payment_hash'],
-            len(plugin.pending[channel_id]),
-        ))
+        if "short_channel_id" in onion:
+            channel_id = onion["short_channel_id"]
 
-        plugin.pending[channel_id].append((request, entry_time))
+            if channel_id not in plugin.pending:
+                plugin.pending[channel_id] = deque()
+            
+            plugin.log("Queueing HTLC {}, next short_channel_id {} now have {} pending HTLCs".format(
+                channel_id, 
+                htlc['payment_hash'],
+                len(plugin.pending[channel_id]),
+            ))
+
+            plugin.pending[channel_id].append((request, entry_time))
+        else:
+            # no way to queue it, so finish
+            request.set_result({'result': 'continue'})
+
     finally:
         plugin.lock.release()
 
