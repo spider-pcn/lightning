@@ -1,30 +1,48 @@
+#!/usr/bin/env python3
+"""Plugin that queues transactions
+
+Used to test restarts / crashes while HTLCs were accepted, but not yet
+settled/forwarded/
+
+"""
+
+
+from lightning import Plugin
+from threading import Thread
+from collections import deque
+import time
+
+plugin = Plugin()
+
 THRESHOLD = 1000 #Msats below which we exclude channels from re-consideration
 def try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash):
     #by here best_route is the route to send the unit on
     #update the value in the route info
-    route_info= plugin.routes_in_use[destination][best_route_index]
-    route_info["amount_on_route"] += amount
+    route_info = plugin.routes_in_use[destination][best_route_index]
+    route_info["amount_inflight"] += amount
 
     #now we actually pay the one unit on that route
     plugin.payment_hash_to_route[payment_hash] = best_route_index
-    plugin.log("attempting to send payment", payment_hash, "on route ", route_info["route"])
+    plugin.log("attempting to send payment", payment_hash,
+               "on route ", route_info["route"])
     plugin.rpc.sendpay(route_info["route"], payment_hash)
 
 def send_more_transactions(plugin, destination, route_index):
     route_info = plugin.routes_in_use[destination][route_index]
-    slack = route_info["window"] - route_info["amount_on_route"]
+    slack = route_info["window"] - route_info["amount_inflight"]
     while len(plugin.queue[destination]) > 0:
         oldest_payment = plugin.queue[destination][0]
-        amount = None #TODO
-        payment_hash = None #TODO
+        amount = oldest_payment['amount_msat']
+        payment_hash = oldest_payment['payment_hash']
         if amount <= slack:
-            try_payment_on_path(plugin, route_index, amount, destination, payment_hash)
+            try_payment_on_path(plugin, route_index, amount,
+                                destination, payment_hash)
         else:
             break
 
 @plugin.subscribe("sendpay_success")
 def handle_sendpay_success(plugin, sendpay_success):
-    plugin.log("receive a sendpay_success recored, id: {},
+    plugin.log("receive a sendpay_success recored, id: {},\
                 payment_hash: {}".format(sendpay_success['id'],
                 sendpay_success['payment_hash'])
             )
@@ -32,16 +50,17 @@ def handle_sendpay_success(plugin, sendpay_success):
     amount = sendpay_success['msatoshi']
     payment_hash = sendpay_success['payment_hash']
     route_index = plugin.payment_hash_to_route[payment_hash]
-    route_tuple = plugin.routes_in_use[destination][route_index]
-    route_tuple["amount_on_route"] -= amount
+    route_info = plugin.routes_in_use[destination][route_index]
+    route_info["amount_inflight"] -= amount
 
     #update window
     summation = 0
     for routes in plugin.routes_in_use[destination]:
         summation += routes["window"]
-    plugin.log("adding ", plugin.alpha/summation, " to window")
-    route_tuple["window"] += (plugin.alpha/summation)
-    slack = route_tuple["window"] - route_tuple["amount_on_route"]
+    plugin.log("adding ", plugin.alpha/summation, " to window on route ",
+               route_info["route"])
+    route_info["window"] += (plugin.alpha/summation)
+    slack = route_info["window"] - route_info["amount_inflight"]
     del plugin.payment_hash_to_route[payment_hash]
 
     send_more_transactions(plugin, destination, route_index)
@@ -49,7 +68,7 @@ def handle_sendpay_success(plugin, sendpay_success):
 
 @plugin.subscribe("sendpay_failure")
 def handle_sendpay_failure(plugin, sendpay_failure):
-    plugin.log("receive a sendpay_failure recored, id: {},
+    plugin.log("receive a sendpay_failure recored, id: {},\
      payment_hash: {}".format(sendpay_failure['data']['id'],
                sendpay_failure['data']['payment_hash']))
 
@@ -57,12 +76,12 @@ def handle_sendpay_failure(plugin, sendpay_failure):
     amount = sendpay_failure['data']['msatoshi']
     payment_hash = sendpay_failure['data']['payment_hash']
     route_index = plugin.payment_hash_to_route[payment_hash]
-    route_tuple = plugin.routes_in_use[destination][route_index]
-    route_tuple["amount_on_route"] -= amount
+    route_info = plugin.routes_in_use[destination][route_index]
+    route_info["amount_inflight"] -= amount
 
     #update window
-    plugin.log("removing ", plugin.beta, " from window")
-    route_tuple["window"] = max(route_tuple["amount_on_route"] - plugin.beta, 1)
+    plugin.log("removing ", plugin.beta, " from window on route ", route_info["route"])
+    route_info["window"] = max(route_info["amount_inflight"] - plugin.beta, 1)
     delete plugin.payment_hash_to_route[payment_hash]
 
 
@@ -81,11 +100,11 @@ def spider_pay(plugin, invoice):
         window = 1
 
         for i in range(4):
-            r = plugin.rpc.getroute(destination, plugin.payment_size, riskfactor=1,
-                                    cltv=9, exclude=excludes)
+            r = plugin.rpc.getroute(destination, plugin.payment_size,
+                                    riskfactor=1, cltv=9, exclude=excludes)
             route_info = {"route": r,
                           "window": window,
-                          "amount_on_route": 0
+                          "amount_inflight": 0
             }
             plugin.routes_in_use[destination].append(route_info)
 
@@ -95,6 +114,7 @@ def spider_pay(plugin, invoice):
 	                excludes.append(c[‘channel’]['short_channel_id'])
 
     if plugin.routes_in_use[destination] == []:
+        plugin.log("no routes to destination: ", destination)
         return failure_msg
 
     best_route = None
@@ -103,7 +123,7 @@ def spider_pay(plugin, invoice):
     best_route_index = None
     #find biggest gap between window and what is being sent
     for i, route_info in enumerate(random_shuffle(plugin.routes_in_use[destination])):
-        slack = route_info["window"] - route_info["amount_on_route"]
+        slack = route_info["window"] - route_info["amount_inflight"]
         if slack >= amount:
             best_route_slack = slack
             best_route = route_info["route"]
@@ -115,10 +135,12 @@ def spider_pay(plugin, invoice):
             plugin.queue[destination].append(invoice)
         else:
             plugin.queue[destination] = dequeue()
+            plugin.log("queueing the following payment: ", invoice["payment_hash"])
             plugin.queue.append(invoice)
         return
 
-    return try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash)
+    return try_payment_on_path(plugin, best_route_index, amount,
+                               destination, payment_hash)
 
 @plugin.init()
 def init(options, configuration, plugin):
