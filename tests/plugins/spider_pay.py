@@ -82,7 +82,7 @@ def handle_sendpay_failure(plugin, sendpay_failure):
     #update window
     plugin.log("removing ", plugin.beta, " from window on route ", route_info["route"])
     route_info["window"] = max(route_info["amount_inflight"] - plugin.beta, 1)
-    delete plugin.payment_hash_to_route[payment_hash]
+    del plugin.payment_hash_to_route[payment_hash]
 
 
 @plugin.async_method('spider_pay')
@@ -111,7 +111,7 @@ def spider_pay(plugin, invoice):
             for c in route:
                 if c['channel']['amount_msat'] < THRESHOLD:
                     if 'short_channel_id' in c['channel']:
-	                excludes.append(c[‘channel’]['short_channel_id'])
+	                       excludes.append(c['channel']['short_channel_id'])
 
     if plugin.routes_in_use[destination] == []:
         plugin.log("no routes to destination: ", destination)
