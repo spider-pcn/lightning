@@ -3,27 +3,30 @@
 from pyln.testing.fixtures import *
 from time import time
 
-plugin_path = os.path.join(os.path.dirname(__file__), "plugins", "spider_pay.py")
+plugin_path = {"plugin": os.path.join(os.path.dirname(__file__), "plugins", "spiderpay.py")}
 
 """ make sure regular payment with channel balances goes through
 """
 def test_regressive(node_factory, executor):
     """Line graph with the middle node (l2) running the plugin.
     """
-    l1, l2, l3 = node_factory.line_graph(
-        3,  # We want 3 nodes
-        opts=[{}, {'plugin': plugin_path}, {}],  # Start l2 with plugin
-        wait_for_announce=True  # Let nodes finish gossip before returning
-    )
+    # l1, l2, l3 = node_factory.line_graph(
+    #     3,  # We want 3 nodes
+    #     opts=[{}, {'plugin': plugin_path}, {}],  # Start l2 with plugin
+    #     wait_for_announce=True  # Let nodes finish gossip before returning
+    # )
+    l1, l2, l3 = node_factory.line_graph(3, opts=plugin_path)
 
     inv = l3.rpc.invoice(42, "lbl{:}".format(int(time())), "description")['bolt11']
 
     # Let the pay run in the background (on an executor thread) so we don't
     # wait for the pay to succeed before we can check in with the plugin.
-    f = executor.submit(l1.rpc.spider_pay, inv)
+    print ("made invoice, before pay")
+    l1.rpc.spiderpay(inv)
+    print ("made invoice, after pay")
     # Now see that the plugin queues it
-    l3.daemon.wait_for_log(r'attempting to send payment')
-    l3.daemon.wait_for_log(r'sendpay_success recored')
+    l1.daemon.wait_for_log(r'attempting to send payment')
+    l1.daemon.wait_for_log(r'sendpay_success recorded')
 
     # Now retrieve the result from the `pay` task we passed to the executor
     # above. If it failed the exception would get re-raised and fail this

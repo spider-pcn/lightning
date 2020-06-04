@@ -42,7 +42,7 @@ def send_more_transactions(plugin, destination, route_index):
 
 @plugin.subscribe("sendpay_success")
 def handle_sendpay_success(plugin, sendpay_success):
-    plugin.log("receive a sendpay_success recored, id: {},\
+    plugin.log("receive a sendpay_success recorded, id: {},\
                 payment_hash: {}".format(sendpay_success['id'],
                 sendpay_success['payment_hash'])
             )
@@ -68,7 +68,7 @@ def handle_sendpay_success(plugin, sendpay_success):
 
 @plugin.subscribe("sendpay_failure")
 def handle_sendpay_failure(plugin, sendpay_failure):
-    plugin.log("receive a sendpay_failure recored, id: {},\
+    plugin.log("receive a sendpay_failure recorded, id: {},\
      payment_hash: {}".format(sendpay_failure['data']['id'],
                sendpay_failure['data']['payment_hash']))
 
@@ -85,23 +85,32 @@ def handle_sendpay_failure(plugin, sendpay_failure):
     del plugin.payment_hash_to_route[payment_hash]
 
 
-@plugin.async_method('spider_pay')
-def spider_pay(plugin, invoice):
-    #TODO
-    destination = plugin.rpc.decodepay(invoice)['payee']
+@plugin.async_method('spiderpay')
+def spiderpay(plugin, invoice):
+    plugin.log("starting to call spiderpay")
+    plugin.log("invoice: ", invoice)
+    decoded = plugin.rpc.decodepay(invoice)
+    plugin.log("type of result: ", type(decoded))
+    plugin.log("decodepay of invoice: ", decoded)
+    destination = decoded['payee']
+    plugin.log("destination: ", destination)
     amount = invoice['amount_msat']
+    plugin.log("amount: ", amount)
     payment_hash = invoice['payment_hash']
+    plugin.log("payment_hash: ", payment_hash)
 
     if destination not in plugin.routes_in_use:
         plugin.routes_in_use[destination] = []
         #routes = find all possible edge disjoint widest paths
         #(maximum minimum weight on a path) (choose 4)
         excludes = []
-        window = 1
+        window = 1000000
+        plugin.log("about to find routes")
 
         for i in range(4):
             r = plugin.rpc.getroute(destination, plugin.payment_size,
                                     riskfactor=1, cltv=9, exclude=excludes)
+            plugin.log("found a route: ", i)
             route_info = {"route": r,
                           "window": window,
                           "amount_inflight": 0
@@ -144,7 +153,7 @@ def spider_pay(plugin, invoice):
 
 @plugin.init()
 def init(options, configuration, plugin):
-    plugin.log("spider_pay.py initializing")
+    plugin.log("spiderpay.py initializing")
 
     #maps destination to list of paths each of which has some score
     #window corresponding to its max capacity and how much we use it
