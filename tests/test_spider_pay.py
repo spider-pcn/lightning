@@ -15,14 +15,14 @@ def test_regressive(node_factory, executor):
     #     opts=[{}, {'plugin': plugin_path}, {}],  # Start l2 with plugin
     #     wait_for_announce=True  # Let nodes finish gossip before returning
     # )
-    l1, l2, l3 = node_factory.line_graph(3, opts=plugin_path)
+    l1, l2, l3 = node_factory.line_graph(3, opts=plugin_path, wait_for_announce=True)
 
     inv = l3.rpc.invoice(42, "lbl{:}".format(int(time())), "description")['bolt11']
 
     # Let the pay run in the background (on an executor thread) so we don't
     # wait for the pay to succeed before we can check in with the plugin.
     print ("made invoice, before pay")
-    l1.rpc.spiderpay(inv)
+    f = executor.submit(l1.rpc.spiderpay, inv)
     print ("made invoice, after pay")
     # Now see that the plugin queues it
     l1.daemon.wait_for_log(r'attempting to send payment')
