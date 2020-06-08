@@ -10,11 +10,14 @@ settled/forwarded/
 from lightning import Plugin
 from threading import Thread
 from collections import deque
+import random
 import time
 
 plugin = Plugin()
 
-THRESHOLD = 1000 #Msats below which we exclude channels from re-consideration
+THRESHOLD = 100000 #Msats below which we exclude channels from re-consideration
+MAX_PATHS = 1
+
 def try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash):
     #by here best_route is the route to send the unit on
     #update the value in the route info
@@ -23,7 +26,7 @@ def try_payment_on_path(plugin, best_route_index, amount, destination, payment_h
 
     #now we actually pay the one unit on that route
     plugin.payment_hash_to_route[payment_hash] = best_route_index
-    plugin.log("attempting to send payment", payment_hash,
+    print("attempting to send payment", payment_hash,
                "on route ", route_info["route"])
     plugin.rpc.sendpay(route_info["route"], payment_hash)
 
@@ -57,7 +60,7 @@ def handle_sendpay_success(plugin, sendpay_success):
     summation = 0
     for routes in plugin.routes_in_use[destination]:
         summation += routes["window"]
-    plugin.log("adding ", plugin.alpha/summation, " to window on route ",
+    print("adding ", plugin.alpha/summation, " to window on route ",
                route_info["route"])
     route_info["window"] += (plugin.alpha/summation)
     slack = route_info["window"] - route_info["amount_inflight"]
@@ -80,24 +83,24 @@ def handle_sendpay_failure(plugin, sendpay_failure):
     route_info["amount_inflight"] -= amount
 
     #update window
-    plugin.log("removing ", plugin.beta, " from window on route ", route_info["route"])
+    print("removing ", plugin.beta, " from window on route ", route_info["route"])
     route_info["window"] = max(route_info["amount_inflight"] - plugin.beta, 1)
     del plugin.payment_hash_to_route[payment_hash]
 
 
 @plugin.async_method('spiderpay')
 def spiderpay(plugin, invoice):
-    plugin.log("starting to call spiderpay")
-    plugin.log("invoice: ", invoice)
+    print("starting to call spiderpay")
+    print("invoice: ", invoice)
     decoded = plugin.rpc.decodepay(invoice)
-    plugin.log("type of result: ", type(decoded))
-    plugin.log("decodepay of invoice: ", decoded)
+    print("type of result: ", type(decoded))
+    print("decodepay of invoice: ", decoded)
     destination = decoded['payee']
-    plugin.log("destination: ", destination)
-    amount = invoice['amount_msat']
-    plugin.log("amount: ", amount)
-    payment_hash = invoice['payment_hash']
-    plugin.log("payment_hash: ", payment_hash)
+    print("destination: ", destination)
+    amount = decoded['msatoshi']
+    print("amount: ", amount)
+    payment_hash = decoded['payment_hash']
+    print("payment_hash: ", payment_hash)
 
     if destination not in plugin.routes_in_use:
         plugin.routes_in_use[destination] = []
@@ -105,33 +108,36 @@ def spiderpay(plugin, invoice):
         #(maximum minimum weight on a path) (choose 4)
         excludes = []
         window = 1000000
-        plugin.log("about to find routes")
+        print("about to find routes")
 
-        for i in range(4):
-            r = plugin.rpc.getroute(destination, plugin.payment_size,
+        for i in range(MAX_PATHS):
+            r = plugin.rpc.getroute(destination, amount,
                                     riskfactor=1, cltv=9, exclude=excludes)
-            plugin.log("found a route: ", i)
-            route_info = {"route": r,
+            print("found the #", i, " route: ", r)
+            route_info = {"route": r['route'],
                           "window": window,
                           "amount_inflight": 0
             }
             plugin.routes_in_use[destination].append(route_info)
 
-            for c in route:
-                if c['channel']['amount_msat'] < THRESHOLD:
-                    if 'short_channel_id' in c['channel']:
-	                       excludes.append(c['channel']['short_channel_id'])
+            for c in r['route']:
+                if 'short_channel_id' in c and c['msatoshi'] < THRESHOLD:
+                    excludes.append(c['short_channel_id'] + '/' + str(c['direction']))
+                print ("excludes: ", excludes)
 
     if plugin.routes_in_use[destination] == []:
-        plugin.log("no routes to destination: ", destination)
+        print("no routes to destination: ", destination)
         return failure_msg
+
+    print ("routes found: ", plugin.routes_in_use[destination])
 
     best_route = None
     #slack is how much we can send minus how much we are sending
     best_route_slack = None
     best_route_index = None
     #find biggest gap between window and what is being sent
-    for i, route_info in enumerate(random_shuffle(plugin.routes_in_use[destination])):
+    random.shuffle(plugin.routes_in_use[destination])
+    for i, route_info in enumerate(plugin.routes_in_use[destination]):
         slack = route_info["window"] - route_info["amount_inflight"]
         if slack >= amount:
             best_route_slack = slack
@@ -144,7 +150,7 @@ def spiderpay(plugin, invoice):
             plugin.queue[destination].append(invoice)
         else:
             plugin.queue[destination] = dequeue()
-            plugin.log("queueing the following payment: ", invoice["payment_hash"])
+            print("queueing the following payment: ", invoice["payment_hash"])
             plugin.queue.append(invoice)
         return
 
