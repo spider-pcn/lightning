@@ -150,7 +150,7 @@ def spiderpay(plugin, invoice):
             plugin.queue[destination].append(invoice)
         else:
             plugin.queue[destination] = dequeue()
-            print("queueing the following payment: ", invoice["payment_hash"])
+            plugin.log("queueing the following payment: {}".format(invoice["payment_hash"]))
             plugin.queue.append(invoice)
         return
 

@@ -10,23 +10,36 @@ plugin_path = {"plugin": os.path.join(os.path.dirname(__file__), "plugins", "spi
 def test_regressive(node_factory, executor):
     """Line graph with the middle node (l2) running the plugin.
     """
-    # l1, l2, l3 = node_factory.line_graph(
-    #     3,  # We want 3 nodes
-    #     opts=[{}, {'plugin': plugin_path}, {}],  # Start l2 with plugin
-    #     wait_for_announce=True  # Let nodes finish gossip before returning
-    # )
+
     l1, l2, l3 = node_factory.line_graph(3, opts=plugin_path, wait_for_announce=True)
 
     inv = l3.rpc.invoice(42, "lbl{:}".format(int(time())), "description")['bolt11']
 
     # Let the pay run in the background (on an executor thread) so we don't
     # wait for the pay to succeed before we can check in with the plugin.
-    print ("made invoice, before pay")
     f = executor.submit(l1.rpc.spiderpay, inv)
-    print ("made invoice, after pay")
     # Now see that the plugin queues it
     l1.daemon.wait_for_log(r'attempting to send payment')
     l1.daemon.wait_for_log(r'sendpay_success recorded')
+
+    # Now retrieve the result from the `pay` task we passed to the executor
+    # above. If it failed the exception would get re-raised and fail this
+    # test, so just retrieving is enough to check it went through
+    f.result()
+
+def test_payment_failure(node_factory, executor):
+    """Line graph with the middle node (l2) running the plugin.
+    """
+
+    l1, l2, l3 = node_factory.line_graph(3, opts=plugin_path, wait_for_announce=True)
+
+    inv = l1.rpc.invoice(42, "lbl{:}".format(int(time())), "description")['bolt11']
+
+    # Let the pay run in the background (on an executor thread) so we don't
+    # wait for the pay to succeed before we can check in with the plugin.
+    f = executor.submit(l3.rpc.spiderpay, inv)
+    # Now see that the plugin queues it
+    l1.daemon.wait_for_log(r'queueing the following payment')
 
     # Now retrieve the result from the `pay` task we passed to the executor
     # above. If it failed the exception would get re-raised and fail this
