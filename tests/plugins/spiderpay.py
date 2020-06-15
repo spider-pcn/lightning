@@ -17,12 +17,14 @@ plugin = Plugin()
 
 THRESHOLD = 100000 #Msats below which we exclude channels from re-consideration
 MAX_PATHS = 1
+MIN_WINDOW = 1000
 
 def try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash):
     #by here best_route is the route to send the unit on
     #update the value in the route info
     route_info = plugin.routes_in_use[destination][best_route_index]
     route_info["amount_inflight"] += amount
+    plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
 
     #now we actually pay the one unit on that route
     plugin.payment_hash_to_route[payment_hash] = best_route_index
@@ -55,13 +57,13 @@ def handle_sendpay_success(plugin, sendpay_success):
     route_index = plugin.payment_hash_to_route[payment_hash]
     route_info = plugin.routes_in_use[destination][route_index]
     route_info["amount_inflight"] -= amount
+    plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
 
     #update window
     summation = 0
     for routes in plugin.routes_in_use[destination]:
         summation += routes["window"]
-    print("adding ", plugin.alpha/summation, " to window on route ",
-               route_info["route"])
+    plugin.log("adding {} to window on route {}".format(plugin.alpha/summation, route_info["route"]))
     route_info["window"] += (plugin.alpha/summation)
     slack = route_info["window"] - route_info["amount_inflight"]
     del plugin.payment_hash_to_route[payment_hash]
@@ -81,33 +83,30 @@ def handle_sendpay_failure(plugin, sendpay_failure):
     route_index = plugin.payment_hash_to_route[payment_hash]
     route_info = plugin.routes_in_use[destination][route_index]
     route_info["amount_inflight"] -= amount
+    plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
 
     #update window
-    print("removing ", plugin.beta, " from window on route ", route_info["route"])
-    route_info["window"] = max(route_info["amount_inflight"] - plugin.beta, 1)
+    plugin.log("removing {} from window on route {}".format(plugin.beta, route_info["route"]))
+    route_info["window"] = max(route_info["amount_inflight"] - plugin.beta, MIN_WINDOW)
+    plugin.log("new window is {}".format(route_info["window"]))
     del plugin.payment_hash_to_route[payment_hash]
 
 
 @plugin.async_method('spiderpay')
 def spiderpay(plugin, invoice):
-    print("starting to call spiderpay")
-    print("invoice: ", invoice)
     decoded = plugin.rpc.decodepay(invoice)
-    print("type of result: ", type(decoded))
-    print("decodepay of invoice: ", decoded)
     destination = decoded['payee']
-    print("destination: ", destination)
     amount = decoded['msatoshi']
-    print("amount: ", amount)
     payment_hash = decoded['payment_hash']
-    print("payment_hash: ", payment_hash)
+    plugin.log("starting to call spiderpay for invoice {} to destination {},\
+               for amount {} with payment hash {}".format(invoice, destination,
+                                                          amount, payment_hash))
 
     if destination not in plugin.routes_in_use:
         plugin.routes_in_use[destination] = []
         #routes = find all possible edge disjoint widest paths
         #(maximum minimum weight on a path) (choose 4)
         excludes = []
-        window = 1000000
         print("about to find routes")
 
         for i in range(MAX_PATHS):
@@ -115,7 +114,7 @@ def spiderpay(plugin, invoice):
                                     riskfactor=1, cltv=9, exclude=excludes)
             print("found the #", i, " route: ", r)
             route_info = {"route": r['route'],
-                          "window": window,
+                          "window": MIN_WINDOW,
                           "amount_inflight": 0
             }
             plugin.routes_in_use[destination].append(route_info)
@@ -149,9 +148,9 @@ def spiderpay(plugin, invoice):
         if destination in plugin.queue:
             plugin.queue[destination].append(invoice)
         else:
-            plugin.queue[destination] = dequeue()
-            plugin.log("queueing the following payment: {}".format(invoice["payment_hash"]))
-            plugin.queue.append(invoice)
+            plugin.queue[destination] = deque()
+            plugin.log("queueing the following payment: {}".format(payment_hash))
+            plugin.queue[destination].append(invoice)
         return
 
     return try_payment_on_path(plugin, best_route_index, amount,
@@ -169,12 +168,5 @@ def init(options, configuration, plugin):
     plugin.payment_hash_to_route = {}
     plugin.beta = 1
     plugin.alpha = 10
-
-    # Now start the background thread that'll trickle the HTLCs
-    # through. daemon=True makes sure that we don't wait for the thread to
-    # exit when shutting down.
-    # TODO: do we need a cleanup thread?
-    #thread = Thread(target=clear_pending, args=(plugin,), daemon=True)
-    #thread.start()
 
 plugin.run()

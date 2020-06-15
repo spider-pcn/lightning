@@ -20,7 +20,10 @@ def test_regressive(node_factory, executor):
     f = executor.submit(l1.rpc.spiderpay, inv)
     # Now see that the plugin queues it
     l1.daemon.wait_for_log(r'attempting to send payment')
+    l1.daemon.wait_for_log(r'amount in flight: 43')
     l1.daemon.wait_for_log(r'sendpay_success recorded')
+    l1.daemon.wait_for_log(r'adding 0.01 to window')
+    l1.daemon.wait_for_log(r'new window is 1000.01')
 
     # Now retrieve the result from the `pay` task we passed to the executor
     # above. If it failed the exception would get re-raised and fail this
@@ -39,44 +42,27 @@ def test_payment_failure(node_factory, executor):
     # wait for the pay to succeed before we can check in with the plugin.
     f = executor.submit(l3.rpc.spiderpay, inv)
     # Now see that the plugin queues it
-    l1.daemon.wait_for_log(r'queueing the following payment')
+    l1.daemon.wait_for_log(r'amount in flight: 43')
+    l1.daemon.wait_for_log(r'receive a sendpay_failure recorded')
+    l1.daemon.wait_for_log(r'amount in flight: 0')
+    l1.daemon.wait_for_log(r'removing 1 from window')
+    l1.daemon.wait_for_log(r'new window is 1000')
 
     # Now retrieve the result from the `pay` task we passed to the executor
     # above. If it failed the exception would get re-raised and fail this
     # test, so just retrieving is enough to check it went through
-    f.result()
+    # f.result()
 
+def test_payment_queue(node_factory, executor):
+    """Line graph with the middle node (l2) running the plugin.
+    """
 
-# """  when there isn't insufficient balance, payment gets queued and completed later
-# """
-# def test_payment_completion(node_factory, executor):
-#     l1, l2, l3 = node_factory.line_graph(
-#         3,  # We want 3 nodes
-#         opts=[{}, {'plugin': plugin_path}, {}],  # Start l2 with plugin
-#         wait_for_announce=True  # Let nodes finish gossip before returning
-#     )
-#
-#     # TODO: need way of setting balances on payment channels
-#     completed = []
-#     futures = []
-#     def trypay(i, sender, receiver):
-#         # Small helper initiating a payment and then inserting itself into the
-#         # list of completed order in the order of completion.
-#         inv = receiver.rpc.invoice(42, "lbl{:}".format(i), "description")['bolt11']
-#         sender.rpc.pay(inv)
-#         completed.append(i)
-#
-#     # Queue all payment attempts, and remember the futures.
-#     for i in range(10):
-#         sender = l1 if i % 2 == 0 else l3
-#         receiver = l3 if i % 2 == 0 else l1
-#         futures.append(executor.submit(trypay, i, sender, receiver))
-#
-#     # Now wait for all futures to complete.
-#     for f in futures:
-#         f.result()
-#
-#     # Now check that all of them completed, should be FIFO
-#     assert(len(completed) == 10)
-#     print(completed)
-#     #assert(completed == list(range(10)))
+    l1, l2, l3 = node_factory.line_graph(3, opts=plugin_path, wait_for_announce=True)
+
+    inv = l3.rpc.invoice(10000000, "lbl{:}".format(int(time())), "description")['bolt11']
+
+    # Let the pay run in the background (on an executor thread) so we don't
+    # wait for the pay to succeed before we can check in with the plugin.
+    f = executor.submit(l1.rpc.spiderpay, inv)
+    # Now see that the plugin queues it
+    l1.daemon.wait_for_log(r'queueing the following payment')
