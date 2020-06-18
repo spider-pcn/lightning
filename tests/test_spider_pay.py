@@ -19,8 +19,8 @@ def test_regressive(node_factory, executor):
     # wait for the pay to succeed before we can check in with the plugin.
     f = executor.submit(l1.rpc.spiderpay, inv)
     # Now see that the plugin queues it
+    l1.daemon.wait_for_log(r'amount in flight: 42')
     l1.daemon.wait_for_log(r'attempting to send payment')
-    l1.daemon.wait_for_log(r'amount in flight: 43')
     l1.daemon.wait_for_log(r'sendpay_success recorded')
     l1.daemon.wait_for_log(r'adding 0.01 to window')
     l1.daemon.wait_for_log(r'new window is 1000.01')
