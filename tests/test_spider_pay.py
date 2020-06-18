@@ -30,6 +30,10 @@ def test_regressive(node_factory, executor):
     # test, so just retrieving is enough to check it went through
     f.result()
 
+""" failure payment should result in a decrease in window size
+    TODO: first send a successful payment to make sure window increases
+    before failing a payment.
+"""
 def test_payment_failure(node_factory, executor):
     """Line graph with the middle node (l2) running the plugin.
     """
@@ -42,7 +46,7 @@ def test_payment_failure(node_factory, executor):
     # wait for the pay to succeed before we can check in with the plugin.
     f = executor.submit(l3.rpc.spiderpay, inv)
     # Now see that the plugin queues it
-    l1.daemon.wait_for_log(r'amount in flight: 43')
+    l1.daemon.wait_for_log(r'amount in flight: 42')
     l1.daemon.wait_for_log(r'receive a sendpay_failure recorded')
     l1.daemon.wait_for_log(r'amount in flight: 0')
     l1.daemon.wait_for_log(r'removing 1 from window')
@@ -66,3 +70,5 @@ def test_payment_queue(node_factory, executor):
     f = executor.submit(l1.rpc.spiderpay, inv)
     # Now see that the plugin queues it
     l1.daemon.wait_for_log(r'queueing the following payment')
+
+

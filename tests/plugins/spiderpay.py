@@ -152,8 +152,10 @@ def spiderpay(plugin, invoice):
 
     print ("routes found: ", plugin.routes_in_use[destination])
 
-    # TODO: queue up if there's already payments to this destination that are queued
-    
+    # queue up if there's already payments to this destination that are queued
+    if destination in plugin.queue and len(plugin.queue[destination]) > 0:
+        plugin.queue[destination].append(invoice)
+        return
 
     # find the route with the biggest gap between window and what is being sent
     best_route = None
