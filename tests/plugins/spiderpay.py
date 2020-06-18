@@ -147,8 +147,9 @@ def spiderpay(plugin, invoice):
                 break
 
     if plugin.routes_in_use[destination] == []:
-        print("no routes to destination: ", destination)
-        return failure_msg
+        plugin.log("no routes to destination:{} for invoice {}".format(destination, invoice))
+        # should fail TODO
+        return
 
     print ("routes found: ", plugin.routes_in_use[destination])
 
@@ -179,7 +180,7 @@ def spiderpay(plugin, invoice):
             plugin.queue[destination].append(invoice)
         return
 
-    return try_payment_on_path(plugin, best_route_index, amount,
+    try_payment_on_path(plugin, best_route_index, amount,
                                destination, payment_hash)
 
 """ initializes the plugin """
