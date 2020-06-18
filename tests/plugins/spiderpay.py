@@ -24,7 +24,7 @@ MIN_WINDOW = 1000
 def try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash):
     route_info = plugin.routes_in_use[destination][best_route_index]
     route_info["amount_inflight"] += amount
-    plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
+    plugin.log("amount in flight: {} on route {}".format(route_info["amount_inflight"], best_route_index))
 
     plugin.payment_hash_to_route[payment_hash] = best_route_index
     print("attempting to send payment", payment_hash,
@@ -151,7 +151,8 @@ def spiderpay(plugin, invoice):
         # should fail TODO
         return
 
-    print ("routes found: ", plugin.routes_in_use[destination])
+    plugin.log("found {} routes to destination {} ".format(len(plugin.routes_in_use[destination]), 
+        destination))
 
     # queue up if there's already payments to this destination that are queued
     if destination in plugin.queue and len(plugin.queue[destination]) > 0:
