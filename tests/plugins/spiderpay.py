@@ -184,6 +184,15 @@ def spiderpay(plugin, invoice):
     try_payment_on_path(plugin, best_route_index, amount,
                                destination, payment_hash)
 
+
+@plugin.method('spider-inspect')
+def inspect(plugin):
+    return {
+        "queue": plugin.queue,
+        "routes_in_use": plugin.routes_in_use,
+    }
+
+
 """ initializes the plugin """
 @plugin.init()
 def init(options, configuration, plugin):
