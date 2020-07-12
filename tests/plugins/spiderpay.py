@@ -38,7 +38,7 @@ def try_payment_on_path(plugin, best_route_index, amount, destination, payment_h
 def send_more_transactions(plugin, destination, route_index):
     route_info = plugin.routes_in_use[destination][route_index]
     slack = route_info["window"] - route_info["amount_inflight"]
-    while len(plugin.queue[destination]) > 0:
+    while len(plugin.queue.get(destination, [])) > 0:
         oldest_payment = plugin.queue[destination][0]
         amount = oldest_payment['amount_msat']
         payment_hash = oldest_payment['payment_hash']
