@@ -54,7 +54,7 @@ def send_more_transactions(plugin, destination, route_index):
     more payments on that route 
 """
 @plugin.subscribe("sendpay_success")
-def handle_sendpay_success(plugin, sendpay_success):
+def handle_sendpay_success(plugin, sendpay_success, **kwargs):
     plugin.log("sendpay_success recorded, id: {},\
                 payment_hash: {}".format(sendpay_success['id'],
                 sendpay_success['payment_hash'])
@@ -85,7 +85,7 @@ def handle_sendpay_success(plugin, sendpay_success):
     update amount inflight and decrease window
 """
 @plugin.subscribe("sendpay_failure")
-def handle_sendpay_failure(plugin, sendpay_failure):
+def handle_sendpay_failure(plugin, sendpay_failure, **kwargs):
     plugin.log("sendpay_failure recorded, id: {},\
      payment_hash: {}".format(sendpay_failure['data']['id'],
                sendpay_failure['data']['payment_hash']))
