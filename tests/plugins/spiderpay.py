@@ -38,7 +38,7 @@ def try_payment_on_path(plugin, best_route_index, amount, destination, payment_h
 def send_more_transactions(plugin, destination, route_index):
     route_info = plugin.routes_in_use[destination][route_index]
     slack = route_info["window"] - route_info["amount_inflight"]
-    while len(plugin.queue[destination]) > 0:
+    while len(plugin.queue.get(destination, [])) > 0:
         oldest_payment = plugin.queue[destination][0]
         amount = oldest_payment['amount_msat']
         payment_hash = oldest_payment['payment_hash']
@@ -54,7 +54,7 @@ def send_more_transactions(plugin, destination, route_index):
     more payments on that route 
 """
 @plugin.subscribe("sendpay_success")
-def handle_sendpay_success(plugin, sendpay_success):
+def handle_sendpay_success(plugin, sendpay_success, **kwargs):
     plugin.log("sendpay_success recorded, id: {},\
                 payment_hash: {}".format(sendpay_success['id'],
                 sendpay_success['payment_hash'])
@@ -85,7 +85,7 @@ def handle_sendpay_success(plugin, sendpay_success):
     update amount inflight and decrease window
 """
 @plugin.subscribe("sendpay_failure")
-def handle_sendpay_failure(plugin, sendpay_failure):
+def handle_sendpay_failure(plugin, sendpay_failure, **kwargs):
     plugin.log("sendpay_failure recorded, id: {},\
      payment_hash: {}".format(sendpay_failure['data']['id'],
                sendpay_failure['data']['payment_hash']))
@@ -183,6 +183,15 @@ def spiderpay(plugin, invoice):
 
     try_payment_on_path(plugin, best_route_index, amount,
                                destination, payment_hash)
+
+
+@plugin.method('spider-inspect')
+def inspect(plugin):
+    return {
+        "queue": plugin.queue,
+        "routes_in_use": plugin.routes_in_use,
+    }
+
 
 """ initializes the plugin """
 @plugin.init()
