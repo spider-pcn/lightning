@@ -75,7 +75,7 @@ def handle_sendpay_success(plugin, sendpay_success):
         summation += routes["window"]
     plugin.log("adding {} to window on route {}".format(plugin.alpha/summation, route_info["route"]))
     route_info["window"] += (plugin.alpha/summation)
-    slack = route_info["window"] - route_info["amount_inflight"]
+    plugin.log("new window is {}".format(route_info["window"]))
     del plugin.payment_hash_to_route[payment_hash]
 
     send_more_transactions(plugin, destination, route_index)
