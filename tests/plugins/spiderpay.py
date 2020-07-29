@@ -12,6 +12,7 @@ from threading import Thread
 from collections import deque
 import random
 import time
+import pdb
 
 plugin = Plugin()
 
@@ -21,7 +22,7 @@ MIN_WINDOW = 1000
 
 """ update inflight and attempt transaction on specified route 
 """
-def try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash):
+def try_payment_on_path(plugin, best_route_index, amount, destination, payment_hash, request):
     route_info = plugin.routes_in_use[destination][best_route_index]
     route_info["amount_inflight"] += amount
     plugin.log("amount in flight: {} on route {}".format(route_info["amount_inflight"], best_route_index))
@@ -29,7 +30,8 @@ def try_payment_on_path(plugin, best_route_index, amount, destination, payment_h
     plugin.payment_hash_to_route[payment_hash] = best_route_index
     print("attempting to send payment", payment_hash,
                "on route ", route_info["route"])
-    plugin.rpc.sendpay(route_info["route"], payment_hash)
+    result = plugin.rpc.sendpay(route_info["route"], payment_hash)
+    #request.set_result(result)
 
 
 """ send more transactions to this destination on this route 
@@ -39,12 +41,15 @@ def send_more_transactions(plugin, destination, route_index):
     route_info = plugin.routes_in_use[destination][route_index]
     slack = route_info["window"] - route_info["amount_inflight"]
     while len(plugin.queue.get(destination, [])) > 0:
-        oldest_payment = plugin.queue[destination][0]
+        oldest_invoice = plugin.queue[destination][0]
+        oldest_payment = plugin.rpc.decodepay(oldest_invoice)
         amount = oldest_payment['amount_msat']
         payment_hash = oldest_payment['payment_hash']
+        request = None
+
         if amount <= slack:
             try_payment_on_path(plugin, route_index, amount,
-                                destination, payment_hash)
+                                destination, payment_hash, request)
         else:
             break
 
@@ -116,6 +121,7 @@ def spiderpay(plugin, invoice):
     destination = decoded['payee']
     amount = decoded['msatoshi']
     payment_hash = decoded['payment_hash']
+    request = None
     plugin.log("starting to call spiderpay for invoice {} to destination {},\
                for amount {} with payment hash {}".format(invoice, destination,
                                                           amount, payment_hash))
@@ -182,7 +188,7 @@ def spiderpay(plugin, invoice):
         return
 
     try_payment_on_path(plugin, best_route_index, amount,
-                               destination, payment_hash)
+                               destination, payment_hash, request)
 
 
 @plugin.method('spider-inspect')

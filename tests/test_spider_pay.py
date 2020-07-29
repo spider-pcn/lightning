@@ -2,6 +2,7 @@
 
 from pyln.testing.fixtures import *
 from time import time
+import pdb
 
 plugin_path = {"plugin": os.path.join(os.path.dirname(__file__), "plugins", "spiderpay.py")}
 
@@ -19,6 +20,7 @@ def test_regressive(node_factory, executor):
     # Now see that the plugin successfully sends it and updates window
     l1.daemon.wait_for_log(r'amount in flight: 42')
     l1.daemon.wait_for_log(r'attempting to send payment')
+    pdb.set_trace()
     l1.daemon.wait_for_log(r'sendpay_success recorded')
     l1.daemon.wait_for_log(r'adding 0.01 to window')
     l1.daemon.wait_for_log(r'new window is 1000.01')
