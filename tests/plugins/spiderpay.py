@@ -31,7 +31,7 @@ def try_payment_on_path(plugin, best_route_index, amount, destination, payment_h
     print("attempting to send payment", payment_hash,
                "on route ", route_info["route"])
     result = plugin.rpc.sendpay(route_info["route"], payment_hash)
-    #request.set_result(result)
+    request.set_result(result)
 
 
 """ send more transactions to this destination on this route 
@@ -41,15 +41,17 @@ def send_more_transactions(plugin, destination, route_index):
     route_info = plugin.routes_in_use[destination][route_index]
     slack = route_info["window"] - route_info["amount_inflight"]
     while len(plugin.queue.get(destination, [])) > 0:
-        oldest_invoice = plugin.queue[destination][0]
+        oldest_invoice = plugin.queue[destination][0]['invoice']
+        oldest_request = plugin.queue[destination][0]['request']
         oldest_payment = plugin.rpc.decodepay(oldest_invoice)
         amount = oldest_payment['amount_msat']
         payment_hash = oldest_payment['payment_hash']
-        request = None
+        
 
         if amount <= slack:
+            plugin.queue[destination].popleft()
             try_payment_on_path(plugin, route_index, amount,
-                                destination, payment_hash, request)
+                                destination, payment_hash, oldest_request)
         else:
             break
 
@@ -116,15 +118,16 @@ def handle_sendpay_failure(plugin, sendpay_failure, **kwargs):
     destination with most available window 
 """
 @plugin.async_method('spiderpay')
-def spiderpay(plugin, invoice):
+def spiderpay(plugin, invoice, request):
     decoded = plugin.rpc.decodepay(invoice)
     destination = decoded['payee']
     amount = decoded['msatoshi']
     payment_hash = decoded['payment_hash']
-    request = None
     plugin.log("starting to call spiderpay for invoice {} to destination {},\
-               for amount {} with payment hash {}".format(invoice, destination,
+               for amount {} with payment hash {}".format(invoice, destination, \
                                                           amount, payment_hash))
+    
+    invoice_request = {'invoice': invoice, 'request': request}
 
     # find a set of routes to the destination
     if destination not in plugin.routes_in_use:
@@ -162,7 +165,7 @@ def spiderpay(plugin, invoice):
 
     # queue up if there's already payments to this destination that are queued
     if destination in plugin.queue and len(plugin.queue[destination]) > 0:
-        plugin.queue[destination].append(invoice)
+        plugin.queue[destination].append(invoice_request)
         return
 
     # find the route with the biggest gap between window and what is being sent
@@ -180,11 +183,11 @@ def spiderpay(plugin, invoice):
 
     if best_route is None:
         if destination in plugin.queue:
-            plugin.queue[destination].append(invoice)
+            plugin.queue[destination].append(invoice_request)
         else:
             plugin.queue[destination] = deque()
             plugin.log("queueing the following payment: {}".format(payment_hash))
-            plugin.queue[destination].append(invoice)
+            plugin.queue[destination].append(invoice_request)
         return
 
     try_payment_on_path(plugin, best_route_index, amount,
