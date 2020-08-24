@@ -92,7 +92,8 @@ def test_multiple_routes(node_factory, executor):
     """
     l1, l2, l3, l4 = node_factory.line_graph(4, opts=opts,
                                              wait_for_announce=True)
-    l4.rpc.connect(l1.info['id'], 'localhost', l1.port)
+    l4.connect(l1)
+    l4.fund_channel(l1, 10**6)
 
     # attempt an l1 - l3 payment
     inv1 = l3.rpc.invoice(40, "lbl1", "description")['bolt11']
