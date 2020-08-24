@@ -1,8 +1,21 @@
 # A lot of this code has been helped by cdecker
 
-from pyln.testing.fixtures import *
+from pyln.testing.fixtures import *  # noqa: F401,F403
 from time import time
-import pdb
+import os
+import pytest
+import logging
+import sys
+
+root = logging.getLogger()
+root.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+handler.setFormatter(formatter)
+root.addHandler(handler)
+
+
 
 plugin_path = {"plugin": os.path.join(os.path.dirname(__file__), "plugins", "spiderpay.py")}
 
@@ -20,7 +33,6 @@ def test_regressive(node_factory, executor):
     # Now see that the plugin successfully sends it and updates window
     l1.daemon.wait_for_log(r'amount in flight: 42')
     l1.daemon.wait_for_log(r'attempting to send payment')
-    pdb.set_trace()
     l1.daemon.wait_for_log(r'sendpay_success recorded')
     l1.daemon.wait_for_log(r'adding 0.01 to window')
     l1.daemon.wait_for_log(r'new window is 1000.01')
