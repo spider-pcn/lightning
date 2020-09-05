@@ -14,7 +14,7 @@ plugin = Plugin()
 THRESHOLD = 100000  # Msats below which we exclude channels from
                     # re-consideration
 MAX_PATHS = 4
-MIN_WINDOW = 1000
+MIN_WINDOW = 100
 
 
 def try_payment_on_path(plugin, best_route_index, amount, destination,
@@ -23,8 +23,10 @@ def try_payment_on_path(plugin, best_route_index, amount, destination,
     """
     route_info = plugin.routes_in_use[destination][best_route_index]
     route_info["amount_inflight"] += amount
-    plugin.log("amount in flight: {} on route {}".format(
-        route_info["amount_inflight"], best_route_index
+    plugin.log("amount in flight: {} on route {}, window: {}".format(
+        route_info["amount_inflight"], 
+        best_route_index, 
+        route_info["window"]
     ))
 
     plugin.payment_hash_to_route[payment_hash] = best_route_index

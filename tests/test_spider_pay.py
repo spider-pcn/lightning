@@ -39,7 +39,7 @@ def test_regressive(node_factory, executor):
     l1.daemon.wait_for_log(r'attempting to send payment')
     l1.daemon.wait_for_log(r'sendpay_success recorded')
     l1.daemon.wait_for_log(r'adding 0.01 to window')
-    l1.daemon.wait_for_log(r'new window is 1000.01')
+    l1.daemon.wait_for_log(r'new window is 100.01')
 
     # Now retrieve the result from the `pay` task we passed to the executor
     # above. If it failed the exception would get re-raised and fail this
@@ -76,7 +76,7 @@ def test_payment_queue(node_factory, executor):
 
     inv = l3.rpc.invoice(10000000, "lbl", "description")['bolt11']
     f = executor.submit(l1.rpc.spiderpay, inv)
-    l1.daemon.wait_for_log(r'queueing the following payment')
+    l1.daemon.wait_for_log(r'insufficient slack')
     f.result()
 
 
@@ -101,18 +101,20 @@ def test_multiple_routes(node_factory, executor):
 
     # should collect two paths
     l1.daemon.wait_for_log(r'found 2 routes to destination')
-    l1.daemon.wait_for_log(r'amount in flight: 40 on route 0')
+    l1.daemon.wait_for_log(r'amount in flight: 40')
 
-    # attempt a second payment - TODO: make sure it goes on the second path
+    # attempt a second payment
+    # since it will go on a different path from the first, 
+    # amount in flight on that path will be 80 and not 120
     inv2 = l3.rpc.invoice(80, "lbl2", "description")['bolt11']
     f2 = executor.submit(l1.rpc.spiderpay, inv2)
-    l1.daemon.wait_for_log(r'amount in flight: 80 on route 1')
+    l1.daemon.wait_for_log(r'amount in flight: 80')
 
-    # attempt a third payment that should get queued
-    # TODO: set up windows correctly
+    # attempt a third payment that should get queued 
+    # since both paths are saturated
     inv3 = l3.rpc.invoice(120, "lbl3", "description")['bolt11']
     f3 = executor.submit(l1.rpc.spiderpay, inv3)
-    l1.daemon.wait_for_log(r'queueing the following payment')
+    l1.daemon.wait_for_log(r'insufficient slack')
 
     # once the windows get increased after the first two payments succeed
     # this payment should go through
