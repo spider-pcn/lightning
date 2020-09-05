@@ -45,7 +45,7 @@ def send_more_transactions(plugin, destination, route_index):
         oldest_invoice = plugin.queue[destination][0]['invoice']
         oldest_request = plugin.queue[destination][0]['request']
         oldest_payment = plugin.rpc.decodepay(oldest_invoice)
-        amount = oldest_payment['amount_msat']
+        amount = oldest_payment['msatoshi']
         payment_hash = oldest_payment['payment_hash']
 
         if amount <= slack:
@@ -208,12 +208,24 @@ def spiderpay(plugin, invoice, request):
 
     # pick a random route to attempt for the payment if 
     # there is slack available on any of them
-    random.shuffle(plugin.routes_in_use[destination])
-    for i, route_info in enumerate(plugin.routes_in_use[destination]):
+    num_paths = len(plugin.routes_in_use[destination])
+    path_ordering = list(range(num_paths))
+    random.shuffle(path_ordering)
+    
+    route_found = False
+    for i in path_ordering:
+        route_info = plugin.routes_in_use[destination][i]
         slack = route_info["window"] - route_info["amount_inflight"]
         if slack >= amount:
             send_more_transactions(plugin, destination, i)
-
+            route_found = True
+            break
+    
+    if not route_found:
+        plugin.log("insufficient slack for payment: {} amount: {}".format(
+            payment_hash, amount
+        ))
+    
 
 @plugin.method('spider-inspect')
 def inspect(plugin):
