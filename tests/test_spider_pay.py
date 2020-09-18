@@ -1,6 +1,7 @@
 # A lot of this code has been helped by cdecker
 
 from pyln.testing.fixtures import *  # noqa: F401,F403
+from lightning import RpcError
 from time import time
 import os
 import pytest
@@ -56,12 +57,11 @@ def test_payment_failure(node_factory, executor):
 
     # Now see that the plugin prematurely fails this because there are no
     # routes because insufficient funds below dust in reverse direction
-    l3.daemon.wait_for_log(r'no routes')
+    l3.daemon.wait_for_log(r'senday_failure')
 
     # Now retrieve the result from the `pay` task we passed to the executor
-    # f.result() # TODO: should be fail
-    with pytest.raises():
-        f.result()
+    with pytest.raises(RpcError):
+        f.result(20)
 
 
 def test_payment_queue(node_factory, executor):
@@ -77,7 +77,9 @@ def test_payment_queue(node_factory, executor):
     inv = l3.rpc.invoice(10000000, "lbl", "description")['bolt11']
     f = executor.submit(l1.rpc.spiderpay, inv)
     l1.daemon.wait_for_log(r'insufficient slack')
-    f.result()
+    with pytest.raises(RpcError):
+        f.result(20)
+
 
 
 def test_multiple_routes(node_factory, executor):
@@ -120,6 +122,7 @@ def test_multiple_routes(node_factory, executor):
     # this payment should go through
     f1.result()
     f2.result()
-    f3.result()
+    with pytest.raises(RpcError):
+        f3.result(20)
 
     # check for correct window increases TODO
