@@ -33,6 +33,7 @@ def try_payment_on_path(plugin, best_route_index, amount, destination,
     print("attempting to send payment", payment_hash,
           "on route ", route_info["route"])
     result = plugin.rpc.sendpay(route_info["route"], payment_hash)
+    plugin.rpc.waitsendpay(payment_hash)
     request.set_result(result)
 
 
@@ -198,13 +199,13 @@ def spiderpay(plugin, invoice, request):
     ))
 
     # add this payment to the payment queue for this destination
+    plugin.log("queueing the following payment: {}".format(
+        payment_hash
+    ))
     if destination in plugin.queue:
         plugin.queue[destination].append(invoice_request)
     else:
         plugin.queue[destination] = deque()
-        plugin.log("queueing the following payment: {}".format(
-            payment_hash
-        ))
         plugin.queue[destination].append(invoice_request)
 
 

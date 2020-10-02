@@ -39,8 +39,8 @@ def test_regressive(node_factory, executor):
     l1.daemon.wait_for_log(r'amount in flight: 42')
     l1.daemon.wait_for_log(r'attempting to send payment')
     l1.daemon.wait_for_log(r'sendpay_success recorded')
-    l1.daemon.wait_for_log(r'adding 0.01 to window')
-    l1.daemon.wait_for_log(r'new window is 100.01')
+    l1.daemon.wait_for_log(r'adding 0.\d+ to window')
+    l1.daemon.wait_for_log(r'new window is 100.\d+')
 
     # Now retrieve the result from the `pay` task we passed to the executor
     # above. If it failed the exception would get re-raised and fail this
@@ -57,7 +57,7 @@ def test_payment_failure(node_factory, executor):
 
     # Now see that the plugin prematurely fails this because there are no
     # routes because insufficient funds below dust in reverse direction
-    l3.daemon.wait_for_log(r'senday_failure')
+    l3.daemon.wait_for_log(r'sendpay_failure')
 
     # Now retrieve the result from the `pay` task we passed to the executor
     with pytest.raises(RpcError):
