@@ -32,9 +32,9 @@ def try_payment_on_path(plugin, best_route_index, amount, destination,
     plugin.payment_hash_to_route[payment_hash] = best_route_index
     print("attempting to send payment", payment_hash,
           "on route ", route_info["route"])
-    result = plugin.rpc.sendpay(route_info["route"], payment_hash)
-    plugin.rpc.waitsendpay(payment_hash)
-    request.set_result(result)
+    
+    plugin.payment_hash_to_request[payment_hash] = request
+    plugin.rpc.sendpay(route_info["route"], payment_hash)
 
 
 def send_more_transactions(plugin, destination, route_index):
@@ -84,6 +84,10 @@ def handle_sendpay_success(plugin, sendpay_success, **kwargs):
     route_info["amount_inflight"] -= amount
     plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
 
+    # set result
+    plugin.payment_hash_to_request[payment_hash].set_result(sendpay_success)
+    del payment_hash_to_request[payment_hash]
+
     # update window
     summation = 0
     for routes in plugin.routes_in_use[destination]:
@@ -119,6 +123,10 @@ def handle_sendpay_failure(plugin, sendpay_failure, **kwargs):
     route_info["amount_inflight"] -= amount
     plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
 
+    # set result
+    plugin.payment_hash_to_request[payment_hash].set_result(sendpay_failure)
+    del payment_hash_to_request[payment_hash]
+    
     # update window
     plugin.log("removing {} from window on route {}".format(
         plugin.beta, route_info["route"]
