@@ -79,29 +79,45 @@ def handle_sendpay_success(plugin, sendpay_success, **kwargs):
     destination = sendpay_success['destination']
     amount = sendpay_success['msatoshi']
     payment_hash = sendpay_success['payment_hash']
-    route_index = plugin.payment_hash_to_route[payment_hash]
-    route_info = plugin.routes_in_use[destination][route_index]
-    route_info["amount_inflight"] -= amount
-    plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
 
     # set result
-    plugin.payment_hash_to_request[payment_hash].set_result(sendpay_success)
-    del payment_hash_to_request[payment_hash]
+    try:
+        plugin.payment_hash_to_request[payment_hash].set_result(sendpay_success)
+        del payment_hash_to_request[payment_hash]
+    except KeyError:
+        plugin.log("unable to set result for payment hash: {}".format(
+                payment_hash
+            )
+        )
 
-    # update window
-    summation = 0
-    for routes in plugin.routes_in_use[destination]:
-        summation += routes["window"]
-    plugin.log("adding {} to window on route {}".format(
-        plugin.alpha/summation,
-        route_info["route"]
-    ))
+    # update inflight/route windows
+    try:
+        route_index = plugin.payment_hash_to_route[payment_hash]
+        route_info = plugin.routes_in_use[destination][route_index]
+        route_info["amount_inflight"] -= amount
+        plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
 
-    route_info["window"] += (plugin.alpha/summation)
-    plugin.log("new window is {}".format(route_info["window"]))
-    del plugin.payment_hash_to_route[payment_hash]
+        # update window
+        summation = 0
+        for routes in plugin.routes_in_use[destination]:
+            summation += routes["window"]
+        plugin.log("adding {} to window on route {}".format(
+            plugin.alpha/summation,
+            route_info["route"]
+        ))
 
-    send_more_transactions(plugin, destination, route_index)
+        route_info["window"] += (plugin.alpha/summation)
+        plugin.log("new window is {}".format(route_info["window"]))
+        del plugin.payment_hash_to_route[payment_hash]
+
+        send_more_transactions(plugin, destination, route_index)
+
+    except KeyError:
+        plugin.log("unable to find route for payment hash: {}".format(
+                payment_hash
+            )
+        )
+
 
 
 @plugin.subscribe("sendpay_failure")
@@ -114,33 +130,46 @@ def handle_sendpay_failure(plugin, sendpay_failure, **kwargs):
      payment_hash: {}".format(sendpay_failure['data']['id'],
                sendpay_failure['data']['payment_hash']))
 
-    # update inflight
     destination = sendpay_failure['data']['destination']
     amount = sendpay_failure['data']['msatoshi']
     payment_hash = sendpay_failure['data']['payment_hash']
-    route_index = plugin.payment_hash_to_route[payment_hash]
-    route_info = plugin.routes_in_use[destination][route_index]
-    route_info["amount_inflight"] -= amount
-    plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
 
     # set result
-    plugin.payment_hash_to_request[payment_hash].set_result(sendpay_failure)
-    del payment_hash_to_request[payment_hash]
-    
-    # update window
-    plugin.log("removing {} from window on route {}".format(
-        plugin.beta, route_info["route"]
-    ))
+    try:
+        plugin.payment_hash_to_request[payment_hash].set_result(sendpay_failure)
+        del payment_hash_to_request[payment_hash]
+    except KeyError:
+        plugin.log("unable to set result for payment hash: {}".format(
+                payment_hash
+            )
+        )
+    # update window/inflight data
+    try:
+        route_index = plugin.payment_hash_to_route[payment_hash]
+        route_info = plugin.routes_in_use[destination][route_index]
+        route_info["amount_inflight"] -= amount
+        plugin.log("amount in flight: {}".format(route_info["amount_inflight"]))
 
-    route_info["window"] = max(
-        route_info["amount_inflight"] - plugin.beta,
-        MIN_WINDOW
-    )
+        plugin.log("removing {} from window on route {}".format(
+            plugin.beta, route_info["route"]
+        ))
 
-    plugin.log("new window is {}".format(route_info["window"]))
-    del plugin.payment_hash_to_route[payment_hash]
-    
-    send_more_transactions(plugin, destination, route_index)
+        route_info["window"] = max(
+            route_info["amount_inflight"] - plugin.beta,
+            MIN_WINDOW
+        )
+
+        plugin.log("new window is {}".format(route_info["window"]))
+        del plugin.payment_hash_to_route[payment_hash]
+        
+        send_more_transactions(plugin, destination, route_index)
+    except KeyError:
+        plugin.log("unable to find route for payment hash: {}".format(
+                payment_hash
+            )
+        )
+
+
 
 
 @plugin.async_method('spiderpay')
@@ -261,6 +290,10 @@ def init(options, configuration, plugin):
     # maps the payments already sent out to the route index that they were
     # sent on
     plugin.payment_hash_to_route = {}
+    
+    # maps the payments already sent out to their requests to set result
+    # eventually
+    plugin.payment_hash_to_request = {}
 
     # window decrease and increase factors
     plugin.beta = 1
