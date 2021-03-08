@@ -106,7 +106,7 @@ def clear_pending(plugin):
                 # We mostly want to let c-lightning handle forwarding, so tell it to
                 # continue whatever it'd do next anyway. 
                 request.set_result({'result': 'continue'})
-            
+        
         finally:
             plugin.lock.release()
 
