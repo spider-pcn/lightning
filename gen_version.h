@@ -1,0 +1,2 @@
+#define VERSION "v0.8.0-35-g8611354"
+#define BUILD_FEATURES ""
